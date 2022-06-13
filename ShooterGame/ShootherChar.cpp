@@ -40,7 +40,7 @@ void AShootherChar::BeginPlay()
 		GunInventory.Add(OtherGun);
 	}
 
-	//if I want an 3° gun
+	//if I want an 3Â° gun
 	/*if (ARifleGun* OtherGun = GetWorld()->SpawnActor<ARifleGun>(Gun3Class, SpawnParams))
 	{
 		OtherGun->GetGunMesh()->SetHiddenInGame(true);
@@ -77,11 +77,6 @@ float AShootherChar::GetGrenadeAmount() const
 {
 	return GrenadeCap;
 }
-
-//int32 AShootherChar::GetGrenadeAmount() const
-//{
-//	return Grenade->MaxCap;
-//}
 
 // Called every frame
 void AShootherChar::Tick(float DeltaTime)
