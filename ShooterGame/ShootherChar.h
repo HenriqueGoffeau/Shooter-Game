@@ -64,7 +64,13 @@ private:
 	void MoveFoward(float AxisValue);
 	void MoveRight(float AxisValue);
 
-	//Guns for the palyer
+	//Camera info
+	UPROPERTY(VisibleAnywhere, Category = "Camera")
+	    class UCameraComponent* Camera;
+	UPROPERTY(VisibleAnywhere, Category = "Camera")
+		class USpringArmComponent* SpringArm;
+
+	//Guns for the player
 	UPROPERTY(EditDefaultsOnly)
 		TSubclassOf<ARifleGun> GunClass;
 	UPROPERTY(EditDefaultsOnly)
