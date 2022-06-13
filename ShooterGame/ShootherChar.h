@@ -1,102 +1,232 @@
-// Fill out your copyright notice in the Description page of Project Settings.
 
-#pragma once
+#include "ShootherChar.h"
+#include "GameFramework/SpringArmComponent.h"
+#include "Camera/CameraComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "RifleGun.h"
+#include "Grenade.h"
+#include "Kismet/KismetMathLibrary.h"
+#include "Components/CapsuleComponent.h"
+#include "ShooterGameGameModeBase.h"
 
-#include "CoreMinimal.h"
-#include "GameFramework/Character.h"
-#include "ShootherChar.generated.h"
 
-class ARifleGun;
-
-UCLASS()
-class SHOOTERGAME_API AShootherChar : public ACharacter
+// Sets default values
+AShootherChar::AShootherChar()
 {
-	GENERATED_BODY()
+	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+	PrimaryActorTick.bCanEverTick = true;
+	
 
-public:
-	// Sets default values for this character's properties
-	AShootherChar();
+	bUseControllerRotationPitch = false;
+	bUseControllerRotationYaw = true;
+	bUseControllerRotationRoll = false;
 
-protected:
-	// Called when the game starts or when spawned
-	virtual void BeginPlay() override;
+	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("Spring Arm"));
+	SpringArm->TargetArmLength = 300.f;
+	SpringArm->bUsePawnControlRotation = true;
+	SpringArm->SetRelativeLocation(FVector(0, 100, 70));
+	SpringArm->bEnableCameraLag = true;
+	SpringArm->CameraLagSpeed = 40.f;
+	SpringArm->SetupAttachment(RootComponent);
 
-public:
+	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
+	Camera->bUsePawnControlRotation = false;
+	Camera->SetupAttachment(SpringArm);
+}
 
-	//to use in gamemode
-	UFUNCTION(BlueprintPure)
-		bool IsDead() const;
+// Called when the game starts or when spawned
+void AShootherChar::BeginPlay()
+{
+	Super::BeginPlay();
 
-	//to use in the HUD
-	UFUNCTION(BlueprintPure)
-		float GetHealthPercent() const;
-	UFUNCTION(BlueprintPure)
-		float GetAmmoWeapon() const;
-	UFUNCTION(BlueprintPure)
-		float GetAmmoReserve() const;
-	UFUNCTION(BlueprintPure)
-		float GetGrenadeAmount() const;
+	GetMesh()->HideBoneByName(TEXT("weapon_r"), EPhysBodyOp::PBO_None);
 
-	// Called every frame
-	virtual void Tick(float DeltaTime) override;
+	GunIndex = 0;
 
-	// Called to bind functionality to input
-	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Owner = this;
 
-	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
+	CurrentGun = GetWorld()->SpawnActor<ARifleGun>(GunClass, SpawnParams);
+	if (CurrentGun)
+	{
+		GunInventory.Add(CurrentGun);
+		CurrentGun->AttachToComponent(GetMesh(), FAttachmentTransformRules::KeepRelativeTransform, TEXT("WeaponSocket"));
+	}
+	if (ARifleGun* OtherGun = GetWorld()->SpawnActor<ARifleGun>(Gun2Class, SpawnParams))
+	{
+		OtherGun->GetGunMesh()->SetHiddenInGame(true);
+		OtherGun->AttachToComponent(GetMesh(), FAttachmentTransformRules::KeepRelativeTransform, TEXT("WeaponSocket"));
+		GunInventory.Add(OtherGun);
+	}
 
-	void Shoot();
+	//if I want an 3° gun
+	/*if (ARifleGun* OtherGun = GetWorld()->SpawnActor<ARifleGun>(Gun3Class, SpawnParams))
+	{
+		OtherGun->GetGunMesh()->SetHiddenInGame(true);
+		OtherGun->AttachToComponent(GetMesh(), FAttachmentTransformRules::KeepRelativeTransform, TEXT("WeaponSocket"));
+		GunInventory.Add(OtherGun);
+	}*/
 
-	void Reload();
+	Health = MaxHealth;
+}
 
-	void GetAmmo();
 
-	void SwitchNextWeapon();
-	void SwitchPreviousWeapon();
+bool AShootherChar::IsDead() const
+{
+	return Health <= 0;
+}
 
-	void ThrowGrenade();
+float AShootherChar::GetHealthPercent() const
+{
+	return Health / MaxHealth;
+}
 
-	UPROPERTY(EditAnywhere, Category = "Grenade")
-		float GrenadeCap = 1;
+float AShootherChar::GetAmmoWeapon() const
+{
+	return CurrentGun->Ammo;
+}
 
-private:
+float AShootherChar::GetAmmoReserve() const
+{
+	return CurrentGun->MaxAmmo;
+}
 
-	void MoveFoward(float AxisValue);
-	void MoveRight(float AxisValue);
+float AShootherChar::GetGrenadeAmount() const
+{
+	return GrenadeCap;
+}
 
-	//Camera info
-	UPROPERTY(VisibleAnywhere, Category = "Camera")
-	    class UCameraComponent* Camera;
-	UPROPERTY(VisibleAnywhere, Category = "Camera")
-		class USpringArmComponent* SpringArm;
+// Called every frame
+void AShootherChar::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
 
-	//Guns for the player
-	UPROPERTY(EditDefaultsOnly)
-		TSubclassOf<ARifleGun> GunClass;
-	UPROPERTY(EditDefaultsOnly)
-		TSubclassOf<ARifleGun> Gun2Class;
+}
 
-	//If I want another gun
-	/*UPROPERTY(EditDefaultsOnly)
-		TSubclassOf<ARifleGun> Gun3Class;*/
+// Called to bind functionality to input
+void AShootherChar::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	UPROPERTY(EditAnywhere)
-		TArray<ARifleGun*> GunInventory;
+	PlayerInputComponent->BindAxis("MoveFoward", this, &AShootherChar::MoveFoward);
+	PlayerInputComponent->BindAxis("MoveRight", this, &AShootherChar::MoveRight);
 
-	//To use infos only about the current gun
-	UPROPERTY()
-		ARifleGun* CurrentGun;
+	//using the default pawn function to control the camera with the mouse						
+	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
+	PlayerInputComponent->BindAxis("LookRight", this, &APawn::AddControllerYawInput);
+	//using the default pawn funtion to jump
+	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
+	PlayerInputComponent->BindAction("Shoot", IE_Pressed, this, &AShootherChar::Shoot);
+	PlayerInputComponent->BindAction("Reload", IE_Pressed, this, &AShootherChar::Reload);
+	PlayerInputComponent->BindAction("SwitchNextWeapon", IE_Pressed, this, &AShootherChar::SwitchNextWeapon);
+	PlayerInputComponent->BindAction("SwitchPreviousWeapon", IE_Pressed, this, &AShootherChar::SwitchPreviousWeapon);
+	PlayerInputComponent->BindAction("ThrowGrenade", IE_Pressed, this, &AShootherChar::ThrowGrenade);
+}
 
-	int32 GunIndex;
+float AShootherChar::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
+{
+	float DamageToApply = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
-	UPROPERTY()
-		class AGrenade* Grenade;
-	UPROPERTY(EditDefaultsOnly)
-		TSubclassOf<AGrenade> GrenadeClass;
+	DamageToApply = FMath::Min(Health, DamageToApply);
+	Health -= DamageToApply;
 
-	UPROPERTY(EditDefaultsOnly)
-		float MaxHealth = 100.f;
 
-	UPROPERTY(EditDefaultsOnly)
-		float Health;
-};
+	//checkin if is dead to prevent move and collision
+	if (IsDead())
+	{
+		AShooterGameGameModeBase* GameMode = GetWorld()->GetAuthGameMode<AShooterGameGameModeBase>();
+
+		if (GameMode != nullptr)
+		{
+			GameMode->PawnKilled(this);
+		}
+
+		DetachFromControllerPendingDestroy();
+		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
+	return DamageToApply;
+}
+
+void AShootherChar::MoveFoward(float AxisValue)
+{
+	AddMovementInput(GetActorForwardVector() * AxisValue);
+
+}
+
+void AShootherChar::MoveRight(float AxisValue)
+{
+	AddMovementInput(GetActorRightVector() * AxisValue);
+}
+
+void AShootherChar::Shoot()
+{
+	CurrentGun->PullTrigger();
+}
+
+void AShootherChar::Reload()
+{
+	CurrentGun->Reload();
+}
+
+void AShootherChar::GetAmmo()
+{
+	CurrentGun->GetAmmo();
+	GrenadeCap += 1;
+}
+
+void AShootherChar::ThrowGrenade()
+{
+	//Don't have throw anim so not going to hidde the gun at the moment
+	bool CanThrow = GrenadeCap > 0;
+	if (CanThrow)
+	{
+		CurrentGun->SetHidden(true);
+
+		Grenade = GetWorld()->SpawnActor<AGrenade>(GrenadeClass);
+			if (Grenade)
+			{
+				Grenade->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetIncludingScale, "hand_lSocket");
+				Grenade->SetHidden(true);
+			}
+
+		Grenade->Throw(UKismetMathLibrary::GetForwardVector(GetControlRotation()));
+		Grenade->SetHidden(false);
+		--GrenadeCap;
+	}
+	CurrentGun->SetHidden(false);
+}
+
+void AShootherChar::SwitchNextWeapon()
+{
+	if (CurrentGun)
+	{
+		if (GunInventory.Num() > GunIndex + 1)
+		{
+			++GunIndex;
+			if (ARifleGun* NextGun = GunInventory[GunIndex])
+			{
+				CurrentGun->GetGunMesh()->SetHiddenInGame(true);
+				CurrentGun = NextGun;
+				CurrentGun->GetGunMesh()->SetHiddenInGame(false);
+			}
+		}
+	}
+}
+
+void AShootherChar::SwitchPreviousWeapon()
+{
+	if (CurrentGun)
+	{
+		if (GunIndex - 1 >= 0)
+		{
+			--GunIndex;
+			if (ARifleGun* NextGun = GunInventory[GunIndex])
+			{
+				CurrentGun->GetGunMesh()->SetHiddenInGame(true);
+				CurrentGun = NextGun;
+				CurrentGun->GetGunMesh()->SetHiddenInGame(false);
+			}
+		}
+	}
+}
